@@ -18,34 +18,89 @@ Requires **JDK 17+** and **Maven 3.8+**. No external dependencies — TLS encryp
 mvn clean package
 ```
 
-This compiles the code and produces a shaded JAR in `target/`.
+This compiles the code and produces the application JAR in `target/`.
 
 ---
 
-## Run
+## Play
 
-**Start the server:**
+There are two ways to play: connect to the hosted server, or run a server locally.
+
+### Option 1: Connect to the hosted server
+
+The server is already running on the Google Cloud VM at `136.86.189.126`, port `50051`. You do not need to start a server. Clone the repository and, from the project directory, start a client:
+
+```sh
+mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="136.86.189.126 50051"
+```
+
+Run one client per player, in a separate terminal for each player. When prompted, enter your name. The client uses `certs/server.crt` to verify the hosted server. 
+### Option 2: Run the server on your own computer
+
+To host a local game, create a private server keystore and matching public certificate on the computer that will run the server. The commands below use the password `changeit`, which matches the current server configuration. Run them from the project directory:
+
+```sh
+mkdir -p certs
+keytool -genkeypair \
+  -alias gameserver \
+  -keyalg RSA -keysize 3072 \
+  -validity 825 \
+  -storetype PKCS12 \
+  -keystore certs/server.p12 \
+  -storepass changeit -keypass changeit \
+  -dname "CN=localhost" \
+  -ext "SAN=DNS:localhost,IP:127.0.0.1" \
+  -ext "KU=digitalSignature,keyEncipherment" \
+  -ext "EKU=serverAuth"
+
+keytool -exportcert -rfc \
+  -alias gameserver \
+  -keystore certs/server.p12 \
+  -storetype PKCS12 -storepass changeit \
+  -file certs/server-local.crt
+
+keytool -importcert -noprompt \
+  -alias gameserver \
+  -file certs/server-local.crt \
+  -keystore certs/truststore.p12 \
+  -storetype PKCS12 -storepass changeit
+```
+
+The client reads `certs/server.crt` to trust the server. For local play, temporarily use the matching local certificate:
+
+```sh
+cp certs/server-local.crt certs/server.crt
+```
+
+Start the server in one terminal:
 
 ```sh
 mvn exec:java -Dexec.mainClass=edu.spaceship.GameServer -Dexec.args="50051"
 ```
 
-The server prints:
-```
-Spaceship Sabotage server listening on port 50051 (TLS). Need 4 players to start.
-```
-
-**Connect the players** (one command per player, in separate terminals):
+Start each player in a separate terminal on that same computer:
 
 ```sh
 mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="localhost 50051"
 ```
 
-After connecting, the client prompts `Enter your name:` — type your name and press Enter. If the name is already taken (case-insensitive), you are asked to choose a different name.
+The game starts when **4 players** are connected. When finished, restore the repository's hosted-server certificate so the hosted play instructions work again:
 
-The client displays your hidden role in a bordered box and a command prompt. Type commands directly:
-
+```sh
+git restore certs/server.crt
+rm -f certs/server-local.crt
 ```
+
+For clients on other computers, `localhost` will not work: it refers to the computer running each client. Use the server computer's reachable IP address, include that IP as an `IP:` SAN when generating its certificate, and allow inbound TCP port `50051` through its firewall. Every client must trust the certificate presented by that server.
+
+
+## Playing the Game
+
+After connecting, the client prompts `Enter your name:`. Type your name and press Enter. If the name is already taken (case-insensitive), choose a different name. The client displays your hidden role and a command prompt. The game starts automatically when **4 players** are connected.
+
+Available commands:
+
+```text
 STATUS
 REPAIR
 SABOTAGE
@@ -56,15 +111,7 @@ VOTE SKIP
 QUIT
 ```
 
-The game starts automatically when **4 players** are connected.
-
-For players on a different machine, use the server's IP address:
-
-```sh
-mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="136.86.189.126 50051"
-```
-
-Use `QUIT` to disconnect.
+Use `QUIT` to disconnect. See [Game Phases](#game-phases), [Player Commands](#player-commands), and [Win Conditions](#win-conditions) below for details.
 
 ---
 
