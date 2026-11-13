@@ -10,10 +10,11 @@ target/
 .DS_Store
 
 # TLS certificates and private keys
-certs/
+certs/*
+!certs/server.crt
+
 *.key
 *.p12
 *.jks
-
 # Environment variables and secrets
 .env
