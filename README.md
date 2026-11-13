@@ -61,7 +61,7 @@ The game starts automatically when **4 players** are connected.
 For players on a different machine, use the server's IP address:
 
 ```sh
-mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="192.168.1.100 50051"
+mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="136.86.189.126 50051"
 ```
 
 Use `QUIT` to disconnect.
