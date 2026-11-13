@@ -9,44 +9,6 @@ Players communicate, debate, and vote to eject suspected saboteurs — but sabot
 
 ---
 
-## Architecture
-
-The game uses a **client-server** architecture over **TCP sockets with TLS transport-layer encryption**:
-
-- **Server** (`GameServer.java`): Owns the authoritative, synchronized game state. Accepts player connections on a configurable port (default 50051) using `SSLServerSocket` with TLS.
-- **Player** (`Player.java`): Interactive Java client that connects via TLS. All communication is encrypted at the transport layer.
-- **Communication** (`Communication.java`): Central library for managing client connections and delivering messages (private or broadcast).
-- **Game Logic** (`GameLogic.java`): Validates actions and synchronizes updates to game state.
-- **State Management** (`GameState.java` for shared state, `PlayerState.java` for individual player data).
-- **Certificates** (`certs/`): Self-signed TLS certificates for server identity and client trust.
-
-### How Messages Flow
-
-1. Player enters a command → client sends it over the TLS-encrypted socket.
-2. `GameServer` receives the message and passes it to `GameLogic`.
-3. `GameLogic` validates the action and updates game state.
-4. `Communication` sends responses (private or broadcast) back to clients over TLS.
-5. Clients receive and display the messages.
-
-All communication is encrypted at the transport layer using TLS.
-
----
-
-## Project Structure
-
-| File | Responsibility |
-|---|---|
-| `GameServer.java` | Starts TLS server, handles client connections, phase timers |
-| `Player.java` | Interactive Java client with TLS encryption |
-| `Communication.java` | Manages client writers; sends private and broadcast messages |
-| `GameLogic.java` | Game rules, action validation, phase transitions, timer logic |
-| `GameState.java` | Shared game state (phase, integrity, players, votes) |
-| `PlayerState.java` | Individual player data (ID, name, role, alive status) |
-| `GamePhase.java` | Phase enum: LOBBY, ACTION, DISCUSSION, VOTING, FINISHED |
-| `certs/` | Self-signed TLS certificates (server.p12, truststore.p12, server.crt) |
-| `pom.xml` | Maven build configuration (JDK 17, zero external dependencies) |
-
----
 
 ## Build
 
@@ -99,7 +61,7 @@ The game starts automatically when **4 players** are connected.
 For players on a different machine, use the server's IP address:
 
 ```sh
-mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="136.86.189.126 50051"
+mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="192.168.1.100 50051"
 ```
 
 Use `QUIT` to disconnect.
@@ -191,70 +153,3 @@ Format: `TYPE|text||phase|integrity`
 Message types: `INFO`, `ROLE`, `EVENT`, `PRIVATE`, `PHASE_CHANGE`, `VOTE_RESULT`, `GAME_OVER`, `SUMMARY`, `DISCONNECT`, `ERROR`.
 
 ---
-
-## TLS Certificates
-
-The game uses **TLS** (Transport Layer Security) for all communication. Self-signed certificates are provided in the `certs/` directory:
-
-| File | Purpose |
-|---|---|
-| `certs/server.p12` | Server keystore (PKCS12, password: `changeit`) |
-| `certs/truststore.p12` | Server truststore (PKCS12, password: `changeit`) |
-| `certs/server.crt` | Server certificate (PEM format, for client trust) |
-
-- The server loads `server.p12` and `truststore.p12` to establish its TLS identity.
-- The client loads `server.crt` to trust the server's certificate.
-- Certificates are valid for 10 years and include SANs for `localhost`, `127.0.0.1`, and common LAN addresses.
-- No external dependencies are needed — Java's built-in `javax.net.ssl` package provides all TLS functionality.
-
----
-
-## Network Setup
-
-### Same Machine
-
-Connect using `localhost`:
-
-```sh
-mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="localhost 50051"
-```
-
-### Local Network (LAN)
-
-1. Find the server machine's IP address:
-   - **macOS:** `ipconfig getifaddr en0`
-   - **Linux:** `hostname -I`
-   - **Windows:** `ipconfig` (look for IPv4 Address)
-
-2. Start the server on the host machine.
-
-3. Connect players from other machines using the server's IP address:
-   ```sh
-   mvn exec:java -Dexec.mainClass=edu.spaceship.Player -Dexec.args="136.86.189.126 50051"
-   ```
-
-### Firewall
-
-Make sure port `50051` is open for incoming connections:
-
-- **macOS:** System Settings → Network → Firewall → Options, allow Java.
-- **Linux:** `sudo ufw allow 50051/tcp`
-- **Windows:** Windows Defender Firewall → Allow an app → Java.
-
----
-
-## Duplicate Name Handling
-
-Player names are checked case-insensitively. If two players attempt to use the same name (e.g., "Alice" and "alice"), the second player receives an error and is prompted to choose a different name. Each player is uniquely identified by a random 8-character ID.
-
----
-
-## Disconnection Handling
-
-When a player disconnects (via `QUIT`, network failure, or process crash):
-
-- The player is marked as eliminated in the game state.
-- Any pending vote from the disconnected player is removed.
-- If all remaining living players have voted, the vote resolves immediately.
-- Win conditions are checked (e.g., all saboteurs disconnected → Crew win).
-- A `DISCONNECT` notification is broadcast to remaining players.
